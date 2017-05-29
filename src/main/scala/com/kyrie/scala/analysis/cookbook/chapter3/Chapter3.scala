@@ -1,4 +1,4 @@
-package com.kyrie.scala.analysis.cookbook.chapter
+package com.kyrie.scala.analysis.cookbook.chapter3
 
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SQLContext
@@ -18,22 +18,14 @@ object Chapter3 {
     val rddOfStudents = convertToStudents("data/student-mat.csv",sc)
 
     import sqlContext.implicits._
-
     val studentDF = rddOfStudents.toDF()
     studentDF.printSchema()
-
     studentDF.show()
-
-
   }
 
-  //转换成Student对象
+  //转换成Student对象的RDD
   def convertToStudents(filePath:String,sc:SparkContext):RDD[Student]={
-
     val rddOfStudents:RDD[Student] = sc.textFile(filePath).flatMap(eachLine => Student(eachLine))
-
     rddOfStudents
   }
-
-
 }

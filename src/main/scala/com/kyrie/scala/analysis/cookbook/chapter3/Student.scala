@@ -1,4 +1,4 @@
-package com.kyrie.scala.analysis.cookbook.chapter
+package com.kyrie.scala.analysis.cookbook.chapter3
 
 import scala.util.{Try, Failure, Success}
 
