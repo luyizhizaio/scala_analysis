@@ -10,7 +10,6 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.mllib.linalg.{Matrix, Vectors, Vector}
-import sun.org.mozilla.javascript.internal.ast.AstNode.PositionComparator
 
 /**
  * Created by tend on 2017/6/1.
@@ -84,7 +83,7 @@ object PCASpam extends App {
   val  reducedTestSplit = testSpamSplit.zip(reducedTestData).map{case (labeled,reduced)=>new LabeledPoint(labeled.label,reduced)}
 
 
-  val logisticWithBFGS = getAlgorithm(10, 1, 0.001) //获取算法
+  val logisticWithBFGS = getAlgorithm(5, 1, 0.001) //获取算法
   val logisticWithBFGSPredictsActuals = runClassification(logisticWithBFGS, reducedTrainingSplit, reducedTestSplit) //得到真实和预测结果
   calculateMetrics(logisticWithBFGSPredictsActuals, "Logistic with BFGS") //度量
 
@@ -168,6 +167,4 @@ object PCASpam extends App {
 
     lpTfIdf
   }
-
-
 }
