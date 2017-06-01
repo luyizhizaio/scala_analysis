@@ -55,6 +55,20 @@ object PCASpam extends App {
   println ("Test split count : "+testSplit.count())
 
 
+  val dimensionDecidingSample=new RowMatrix((trainingData.randomSplit(Array(0.8,0.2))(1)).map(lp=>lp.features))
+  val svd = dimensionDecidingSample.computeSVD(100, computeU = false)
+  val sum = svd.s.toArray.sum
+  //Calculate the number of principal components which could retain a variance of 95%
+  val featureRange=(0 to 1000)
+
+  val placeholder=svd.s.toArray.zip(featureRange).foldLeft(0.0) {
+    case (cum, (curr, component)) =>
+      val percent = (cum + curr) / sum
+      println(s"Component and percent ${component + 1} :: $percent :::: Singular value is : $curr")
+      cum + curr
+  }
+
+
   val unlabeledTrainData = trainingData.map(lpoint=> Vectors.dense(lpoint.features.toArray)).cache()
 
   val scaler = new StandardScaler(withMean = true,withStd=false).fit(unlabeledTrainData)
@@ -82,11 +96,13 @@ object PCASpam extends App {
   val reducedTestData = testMatrix.multiply(pcomp).rows.cache()
   val  reducedTestSplit = testSpamSplit.zip(reducedTestData).map{case (labeled,reduced)=>new LabeledPoint(labeled.label,reduced)}
 
+/*
 
   val logisticWithBFGS = getAlgorithm(5, 1, 0.001) //获取算法
   val logisticWithBFGSPredictsActuals = runClassification(logisticWithBFGS, reducedTrainingSplit, reducedTestSplit) //得到真实和预测结果
   calculateMetrics(logisticWithBFGSPredictsActuals, "Logistic with BFGS") //度量
 
+*/
 
 
 
