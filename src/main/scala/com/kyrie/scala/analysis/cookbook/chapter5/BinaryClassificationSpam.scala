@@ -81,7 +81,7 @@ object BinaryClassificationSpam extends App {
   def runClassification(algorithm :GeneralizedLinearAlgorithm[_ <:GeneralizedLinearModel],
                          trainData:RDD[LabeledPoint],testData:RDD[LabeledPoint]):RDD[(Double,Double)]={
 
-    val mode = algorithm.run(trainData)
+    val model = algorithm.run(trainData)
     val predicted = model.predict(testData.map(point => point.features))
     val actuals = testData.map(point => point.label)
     val predictAndActuals:RDD[(Double,Double)] = predicted.zip(actuals)
@@ -92,7 +92,7 @@ object BinaryClassificationSpam extends App {
 
 
 
-  def gteAlgorithn(algo:String,iterations:Int, stepSize:Double,regParam:Double) = algo match{
+  def getAlgorithm(algo:String,iterations:Int, stepSize:Double,regParam:Double) = algo match{
 
     case "LOGSGD" => {
       val algo = new LogisticRegressionWithSGD()
