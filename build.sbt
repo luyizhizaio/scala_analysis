@@ -22,5 +22,9 @@ libraryDependencies  ++= Seq(
   "org.scalanlp" % "epic_2.10" % "0.3.1",
   "org.scalanlp" % "epic-parser-en-span_2.10" % "2015.2.19",
   "edu.stanford.nlp" % "stanford-corenlp" % "3.4.1",
-  "edu.stanford.nlp" % "stanford-corenlp" % "3.4.1" classifier "models"
+  "edu.stanford.nlp" % "stanford-corenlp" % "3.4.1" classifier "models",
+  "org.scalanlp" %% "breeze" % "0.12",
+  "org.scalanlp" %% "breeze-natives" % "0.12",
+  "org.scalanlp" %% "breeze-viz" % "0.12"
 )
+
