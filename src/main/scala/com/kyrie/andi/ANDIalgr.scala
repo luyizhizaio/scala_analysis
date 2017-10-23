@@ -63,9 +63,7 @@ object ANDIalgr {
     //邻接矩阵
     val adjMatrix = geneAdjMatrix(data)
     //权重-节点的度
-    val degrees:VertexRDD[Int] = geneBinaryBipartiteGraphWeight(data)
-
-    degrees.cache()
+    val degrees:VertexRDD[Int] = geneBinaryBipartiteGraphWeight(data).cache()
 
     val vol =  degrees.map{v => v._2}.reduce(_ + _).toDouble
     println(s"vol :$vol")
@@ -82,9 +80,7 @@ object ANDIalgr {
 
     val M = new CoordinateMatrix(matrix.toCoordinateMatrix().entries.map{entry =>
       MatrixEntry(entry.i,entry.j ,entry.value * 0.5)
-    }).toBlockMatrix()
-
-    M.persist(StorageLevel.MEMORY_AND_DISK)
+    }).toBlockMatrix().persist(StorageLevel.MEMORY_AND_DISK)
 
     println("M matrix")
     println(M.toLocalMatrix())
@@ -110,7 +106,9 @@ object ANDIalgr {
       printMatrix(qt.toCoordinateMatrix())
 
 
-      val rMatrixEntry2 = degrees.leftOuterJoin(qt.toCoordinateMatrix().entries.map{entry => entry.i -> entry.value}).map{v =>
+      val entries: RDD[MatrixEntry] = qt.toCoordinateMatrix().entries.cache()
+
+      val rMatrixEntry2 = degrees.leftOuterJoin(entries.map{entry => entry.i -> entry.value}).map{v =>
 
         val degree = v._2._1
         val p = v._2._2.getOrElse(0.0)
@@ -126,17 +124,15 @@ object ANDIalgr {
       printMatrix(rMatrix.toCoordinateMatrix())
 
       //Size
-      if(qt.toCoordinateMatrix().entries.count() <= k){
-        return qt.toCoordinateMatrix().entries.map{entry => entry.i}
+      if(entries.count() <= k){
+        return entries.map{entry => entry.i}
       }
 
-      val qtRdd = qt.toCoordinateMatrix().entries.map{entry => entry.i -> entry.value}.cache
+      val qtRdd = entries.map{entry => entry.i -> entry.value}.cache
 
       for ( j <- k to n ){
 
-        //Volume
-        //判断条件：节点的值除以节点的度得到一个值，根据这个值排序，取出前j个节点,前j个节点的度的和
-
+        //Volume 判断条件：节点的值除以节点的度得到一个值，根据这个值排序，取出前j个节点,前j个节点的度的和
         val topQt = degrees.join(qtRdd).map{x  =>
           val degree = x._2._1
           val p =x._2._2
@@ -144,11 +140,9 @@ object ANDIalgr {
         }.top(j)(QtPreDef.tupleOrdering)
 
         val lambda = topQt.map{tri => tri._3}.reduce(_ + _)
-//        val lambda = getLambda(qtRdd,degrees,j).toDouble
         println(s"lamda:$lambda")
 
-        //Large Prob Mass
-        //j'满足λj 0 (qt ) ≤ 2b ≤ λj 0+1(qt ) 这个式子， I= qt中j'节点的值除以j'节点的度。
+        //Large Prob Mass ,I= qt中j'节点的值除以j'节点的度。
         val I = topQt.last._2
 
         val f = ((l+2) * Math.pow(2,b))/c4
