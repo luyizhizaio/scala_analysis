@@ -25,11 +25,11 @@ object ANDIalgr {
     //活动节点
     val seed = List(0,2)
     //迭代次数
-    var t=30
+    var t=15
     //潜在感兴趣用户的数量
     val k = 5
 
-    val ε = 0.04
+    val ε = 0.03
     //本地簇的大小
     val b = 3
     //节点数
@@ -37,7 +37,9 @@ object ANDIalgr {
 
     val c4 = 140
 
-    val idRDD = andiAlgr(sc,data,t,seed,k,n,ε,b)
+    val l = 1.0
+
+    val idRDD = andiAlgr(sc,data,t,seed,k,n,ε,b,l)
     println("result：")
     idRDD.foreach(println)
 
@@ -56,11 +58,11 @@ object ANDIalgr {
 
   }
 
-  def andiAlgr(sc:SparkContext,data:RDD[String],t:Int,seed:List[Int],k:Int,n:Int,ε:Double,b:Int):RDD[Long]={
+  def andiAlgr(sc:SparkContext,data:RDD[String],t:Int,seed:List[Int],k:Int,n:Int,ε:Double,b:Int,l:Double):RDD[Long]={
 
     //邻接矩阵
     val adjMatrix = geneAdjMatrix(data)
-    //权重
+    //权重-节点的度
     val degrees:VertexRDD[Int] = geneBinaryBipartiteGraphWeight(data)
 
     degrees.cache()
@@ -104,17 +106,21 @@ object ANDIalgr {
     var index =0
     while( index < t){
       val qt =  M.multiply(rMatrix)
-      println("qt matrix:")
+      println(s"qt matrix: ${qt.numRows()}")
       printMatrix(qt.toCoordinateMatrix())
 
 
-      println(s"r Matrix before: ${rMatrix.numRows()}")
-      printMatrix(rMatrix.toCoordinateMatrix())
+      val rMatrixEntry2 = degrees.leftOuterJoin(qt.toCoordinateMatrix().entries.map{entry => entry.i -> entry.value}).map{v =>
 
-      rMatrix = new CoordinateMatrix(qt.toCoordinateMatrix().entries.map{entry =>
-        if(entry.value < ε) MatrixEntry(entry.i,entry.j ,0.0)
-        else entry
-      }).toBlockMatrix()
+        val degree = v._2._1
+        val p = v._2._2.getOrElse(0.0)
+
+        if (p < degree * ε) MatrixEntry(v._1,0 ,0.0)
+        else MatrixEntry(v._1,0 ,p)
+      }
+
+
+      rMatrix = new CoordinateMatrix(rMatrixEntry2).toBlockMatrix()
 
       println(s"r Matrix after: ${rMatrix.numRows()}")
       printMatrix(rMatrix.toCoordinateMatrix())
@@ -123,31 +129,38 @@ object ANDIalgr {
       val sortedR = rMatrix.toCoordinateMatrix().entries.map(entry => entry.i ->entry.value ).sortBy(x => x._2,false)
 
       //Size
-
       if(rMatrix.numRows() <= k){
         return rMatrix.toCoordinateMatrix().entries.map{entry => entry.i}
       }
 
-
       for ( j <- k to n ){
 
         //Volume
-        //判断条件：节点的值除以节点的度得到一个值，根据这个值去除前j个节点,前j个节点的度的和
-        val qtRdd = qt.toCoordinateMatrix().entries.map{entry => entry.i}
-        val lambda = getLambda(qtRdd,degrees).toDouble
+        //判断条件：节点的值除以节点的度得到一个值，根据这个值排序，取出前j个节点,前j个节点的度的和
+        val qtRdd = qt.toCoordinateMatrix().entries.map{entry => entry.i -> entry.value}
+
+        val sortedQt = degrees.join(qtRdd).map{x  =>
+          val degree = x._2._1
+          val p =x._2._2
+          (x._1 , p / degree ,degree)
+        }.top(j)(QtPreDef.tupleOrdering)
+
+        val lambda = sortedQt.map{tri => tri._3}.reduce(_ + _)
+//        val lambda = getLambda(qtRdd,degrees,j).toDouble
         println(s"lamda:$lambda")
+
+        if(lambda >= Math.pow(2,b) && lambda < vol * 5/6  ) {
+
+          //排序r获取前j个元素生成Sj(qt)
+          val Sj = sortedQt.take(k)
+
+          return sc.parallelize(Sj).map{case(id,_,_) => id}
+        }
 
         //Large Prob Mass
         //j'满足λj 0 (qt ) ≤ 2b ≤ λj 0+1(qt ) 这个式子， I= qt中j'节点的值除以j'节点的度。
 
 
-        /*if(lambda >= Math.pow(2,b) && lambda < vol * 5/6  ) {
-
-          //排序r获取前j个元素生成Sj(qt)
-          val Sj = sortedR.take(k)
-
-          return sc.parallelize(Sj).map{case(id,weight) => id}
-        }*/
       }
 
       index += 1
@@ -157,10 +170,15 @@ object ANDIalgr {
 
   }
 
-  def getLambda(qt:RDD[Long], degrees:VertexRDD[Int]) :Int={
+  def getLambda(qtRdd:RDD[(Long,Double)], degrees:VertexRDD[Int],j:Int):Int={
 
-    val qt1 = qt.map{id => (id -> 0)}
-    degrees.join(qt1).map{x  => x._2._1}.reduce(_ + _)
+    //判断条件：节点的值除以节点的度得到一个值，根据这个值排序，取出前j个节点,前j个节点的度的和
+    degrees.join(qtRdd).map{x  =>
+      val degree = x._2._1
+      val p =x._2._2
+      (x._1 , p / degree ,degree)
+    }.top(j)(QtPreDef.tupleOrdering).map{tri => tri._3}.reduce(_ + _)
+
   }
 
 
@@ -199,7 +217,6 @@ object ANDIalgr {
   }
 
   def printMatrix(matrix :CoordinateMatrix): Unit ={
-
     matrix.entries.foreach(entry => println( "row:" + entry.i + "     column:" + entry.j + "   value:" + entry.value))
   }
 
