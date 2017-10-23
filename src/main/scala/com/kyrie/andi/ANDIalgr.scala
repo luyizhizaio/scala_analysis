@@ -29,9 +29,9 @@ object ANDIalgr {
     //潜在感兴趣用户的数量
     val k = 5
 
-    val ε = 0.03
+    val ε = 0.04
     //本地簇的大小
-    val b = 3
+    val b = 5
     //节点数
     val n = 15
 
@@ -39,7 +39,7 @@ object ANDIalgr {
 
     val l = 1.0
 
-    val idRDD = andiAlgr(sc,data,t,seed,k,n,ε,b,l)
+    val idRDD = andiAlgr(sc,data,t,seed,k,n,ε,b,l,c4)
     println("result：")
     idRDD.foreach(println)
 
@@ -58,7 +58,7 @@ object ANDIalgr {
 
   }
 
-  def andiAlgr(sc:SparkContext,data:RDD[String],t:Int,seed:List[Int],k:Int,n:Int,ε:Double,b:Int,l:Double):RDD[Long]={
+  def andiAlgr(sc:SparkContext,data:RDD[String],t:Int,seed:List[Int],k:Int,n:Int,ε:Double,b:Int,l:Double,c4:Int):RDD[Long]={
 
     //邻接矩阵
     val adjMatrix = geneAdjMatrix(data)
@@ -125,41 +125,41 @@ object ANDIalgr {
       println(s"r Matrix after: ${rMatrix.numRows()}")
       printMatrix(rMatrix.toCoordinateMatrix())
 
-      //排序
-      val sortedR = rMatrix.toCoordinateMatrix().entries.map(entry => entry.i ->entry.value ).sortBy(x => x._2,false)
-
       //Size
-      if(rMatrix.numRows() <= k){
-        return rMatrix.toCoordinateMatrix().entries.map{entry => entry.i}
+      if(qt.toCoordinateMatrix().entries.count() <= k){
+        return qt.toCoordinateMatrix().entries.map{entry => entry.i}
       }
+
+      val qtRdd = qt.toCoordinateMatrix().entries.map{entry => entry.i -> entry.value}.cache
 
       for ( j <- k to n ){
 
         //Volume
         //判断条件：节点的值除以节点的度得到一个值，根据这个值排序，取出前j个节点,前j个节点的度的和
-        val qtRdd = qt.toCoordinateMatrix().entries.map{entry => entry.i -> entry.value}
 
-        val sortedQt = degrees.join(qtRdd).map{x  =>
+        val topQt = degrees.join(qtRdd).map{x  =>
           val degree = x._2._1
           val p =x._2._2
           (x._1 , p / degree ,degree)
         }.top(j)(QtPreDef.tupleOrdering)
 
-        val lambda = sortedQt.map{tri => tri._3}.reduce(_ + _)
+        val lambda = topQt.map{tri => tri._3}.reduce(_ + _)
 //        val lambda = getLambda(qtRdd,degrees,j).toDouble
         println(s"lamda:$lambda")
 
-        if(lambda >= Math.pow(2,b) && lambda < vol * 5/6  ) {
+        //Large Prob Mass
+        //j'满足λj 0 (qt ) ≤ 2b ≤ λj 0+1(qt ) 这个式子， I= qt中j'节点的值除以j'节点的度。
+        val I = topQt.last._2
 
+        val f = ((l+2) * Math.pow(2,b))/c4
+        println(s"I=$I ,f:$f" )
+
+        if(lambda >= Math.pow(2,b) && lambda < vol * 5/6 && I >= f) {
           //排序r获取前j个元素生成Sj(qt)
-          val Sj = sortedQt.take(k)
+          val Sj = topQt.take(k)
 
           return sc.parallelize(Sj).map{case(id,_,_) => id}
         }
-
-        //Large Prob Mass
-        //j'满足λj 0 (qt ) ≤ 2b ≤ λj 0+1(qt ) 这个式子， I= qt中j'节点的值除以j'节点的度。
-
 
       }
 
