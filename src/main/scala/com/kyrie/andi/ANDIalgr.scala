@@ -14,6 +14,12 @@ import util.control.Breaks._
  */
 object ANDIalgr {
 
+
+  val c4 = 140.0
+
+
+  case class Param(seed:List[Int],k:Int,epsilon:Int,b:Int,n:Int,l:Int,u:Int)
+
   def main(args: Array[String]) {
     Logger.getLogger("org.apache.spark").setLevel(Level.ERROR);
     Logger.getLogger("org.eclipse.jetty.server").setLevel(Level.ERROR);
@@ -29,17 +35,18 @@ object ANDIalgr {
     //潜在感兴趣用户的数量
     val k = 2
 
-    val epsilon = 0.04
-    //本地簇的大小 +1
+    val epsilon = 0.1
+    //本地簇的大小-1
     val b = 1
     //节点数
     val n = 4
 
-    val c4 = 140.0
-
     val l = 4.0
 
-    val idRDD = andiAlgr(sc,data,t,seed,k,n,epsilon,b,l,c4)
+    //用户的总数量
+    val u =2
+
+    val idRDD = andiAlgr(sc,data,t,seed,k,n,epsilon,b,l,u)
     println("result：")
     idRDD.foreach(println)
 
@@ -58,7 +65,7 @@ object ANDIalgr {
 
   }
 
-  def andiAlgr(sc:SparkContext,data:RDD[String],t:Int,seed:List[Int],k:Int,n:Int,epsilon:Double,b:Int,l:Double,c4:Double):RDD[Long]={
+  def andiAlgr(sc:SparkContext,data:RDD[String],t:Int,seed:List[Int],k:Int,n:Int,epsilon:Double,b:Int,l:Double,u:Int):RDD[Long]={
 
     //邻接矩阵
     val adjMatrix = geneAdjMatrix(data)
@@ -144,7 +151,7 @@ object ANDIalgr {
           //Volume 判断条件：节点的值除以节点的度得到一个值，根据这个值排序，取出前j个节点,前j个节点的度的和
           val topQt = qt.top(j+1)(QtPreDef.tupleOrdering)
           topQt.foreach(println(_))
-          users = topQt.filter{case(index,_,_) => index < 2}.length
+          users = topQt.filter{case(index,_,_) => index < u}.length
 
           val lambda = topQt.map{tri => tri._3}.reduce(_ + _)
           println(s"lamda:$lambda")
