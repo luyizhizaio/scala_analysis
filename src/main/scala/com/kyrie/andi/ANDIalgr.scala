@@ -30,12 +30,12 @@ object ANDIalgr {
     val k = 2
 
     val epsilon = 0.04
-    //本地簇的大小
-    val b = 2
+    //本地簇的大小 +1
+    val b = 1
     //节点数
     val n = 4
 
-    val c4 = 600.0
+    val c4 = 140.0
 
     val l = 4.0
 
