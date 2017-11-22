@@ -7,7 +7,7 @@ import org.apache.spark.mllib.linalg.distributed.{BlockMatrix, CoordinateMatrix,
 import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.{SparkContext, SparkConf}
-import org.apache.spark.mllib.linalg.{Vector, Vectors}
+import util.control.Breaks._
 
 /**
  * Created by tend on 2017/10/9.
@@ -21,25 +21,25 @@ object ANDIalgr {
     val conf = new SparkConf().setMaster("local[*]").setAppName(this.getClass.getSimpleName)
     val sc = new SparkContext(conf)
 
-    val data:RDD[String] = sc.textFile("data/edge")
+    val data:RDD[String] = sc.textFile("data/edge2")
     //活动节点
-    val seed = List(0,2)
+    val seed = List(2,3)
     //迭代次数
-    var t=15
+    var t=100
     //潜在感兴趣用户的数量
-    val k = 5
+    val k = 2
 
-    val ε = 0.04
+    val epsilon = 0.04
     //本地簇的大小
-    val b = 5
+    val b = 2
     //节点数
-    val n = 15
+    val n = 4
 
-    val c4 = 140
+    val c4 = 600.0
 
-    val l = 1.0
+    val l = 4.0
 
-    val idRDD = andiAlgr(sc,data,t,seed,k,n,ε,b,l,c4)
+    val idRDD = andiAlgr(sc,data,t,seed,k,n,epsilon,b,l,c4)
     println("result：")
     idRDD.foreach(println)
 
@@ -58,12 +58,12 @@ object ANDIalgr {
 
   }
 
-  def andiAlgr(sc:SparkContext,data:RDD[String],t:Int,seed:List[Int],k:Int,n:Int,ε:Double,b:Int,l:Double,c4:Int):RDD[Long]={
+  def andiAlgr(sc:SparkContext,data:RDD[String],t:Int,seed:List[Int],k:Int,n:Int,epsilon:Double,b:Int,l:Double,c4:Double):RDD[Long]={
 
     //邻接矩阵
     val adjMatrix = geneAdjMatrix(data)
     //权重-节点的度
-    val degrees:VertexRDD[Int] = geneBinaryBipartiteGraphWeight(data).cache()
+    val degrees:RDD[(Long,Int)] = geneBinaryBipartiteGraphWeight(data).cache()
 
     val vol =  degrees.map{v => v._2}.reduce(_ + _).toDouble
     println(s"vol :$vol")
@@ -113,7 +113,7 @@ object ANDIalgr {
         val degree = v._2._1
         val p = v._2._2.getOrElse(0.0)
 
-        if (p < degree * ε) MatrixEntry(v._1,0 ,0.0)
+        if (p < degree * epsilon) MatrixEntry(v._1,0 ,0.0)
         else MatrixEntry(v._1,0 ,p)
       }
 
@@ -123,41 +123,55 @@ object ANDIalgr {
       println(s"r Matrix after: ${rMatrix.numRows()}")
       printMatrix(rMatrix.toCoordinateMatrix())
 
-      //Size
-      if(entries.count() <= k){
-        return entries.map{entry => entry.i}
-      }
+      index += 1
+      breakable{
+        if(entries.count().toInt < k){
+          break;
+        }
 
-      val qtRdd = entries.map{entry => entry.i -> entry.value}.cache
+        val qtRdd = entries.map{entry => entry.i -> entry.value}.cache
 
-      for ( j <- k to n ){
-
-        //Volume 判断条件：节点的值除以节点的度得到一个值，根据这个值排序，取出前j个节点,前j个节点的度的和
-        val topQt = degrees.join(qtRdd).map{x  =>
+        val qt = degrees.join(qtRdd).map{x  =>
           val degree = x._2._1
           val p =x._2._2
           (x._1 , p / degree ,degree)
-        }.top(j)(QtPreDef.tupleOrdering)
+        }
+        //用户数
+        var users:Int = 0
+        for ( j <- k to n-1 ){
 
-        val lambda = topQt.map{tri => tri._3}.reduce(_ + _)
-        println(s"lamda:$lambda")
 
-        //Large Prob Mass ,I= qt中j'节点的值除以j'节点的度。
-        val I = topQt.last._2
+          //Volume 判断条件：节点的值除以节点的度得到一个值，根据这个值排序，取出前j个节点,前j个节点的度的和
+          val topQt = qt.top(j+1)(QtPreDef.tupleOrdering)
+          topQt.foreach(println(_))
+          users = topQt.filter{case(index,_,_) => index < 2}.length
 
-        val f = ((l+2) * Math.pow(2,b))/c4
-        println(s"I=$I ,f:$f" )
+          val lambda = topQt.map{tri => tri._3}.reduce(_ + _)
+          println(s"lamda:$lambda")
 
-        if(lambda >= Math.pow(2,b) && lambda < vol * 5/6 && I >= f) {
-          //排序r获取前j个元素生成Sj(qt)
-          val Sj = topQt.take(k)
+          //Size
+          val condition1 = users >= k
 
-          return sc.parallelize(Sj).map{case(id,_,_) => id}
+          val condition2 =  lambda >= (2 << b) && lambda < (vol * 5.0)/6
+
+          //Large Prob Mass ,I= qt中j'节点的值除以j'节点的度。
+          val I = topQt.last._2
+
+          val f = (1/c4) * (l+2) * (2 << b)
+          println(s"I=$I ,f:$f" )
+
+          val condition3 = I >= f
+
+          if(condition1 && condition2 && condition3) {
+            //排序r获取前j个元素生成Sj(qt)
+            val Sj = topQt.take(k)
+
+            return sc.parallelize(Sj).map{case(id,_,_) => id}
+          }
+
         }
 
       }
-
-      index += 1
     }
 
     return sc.parallelize(Seq())
@@ -179,12 +193,12 @@ object ANDIalgr {
 
   def geneAdjMatrix(data:RDD[String]) :BlockMatrix = {
 
-    val adjMatrixEntry1 = data.map(_.split(" ") match { case Array(id1 ,id2) =>
-      MatrixEntry(id1.toLong,id2.toLong , 1.0)
+    val adjMatrixEntry1 = data.map(_.split(" ") match { case Array(id1 ,id2,click) =>
+      MatrixEntry(id1.toLong,id2.toLong , click.toInt)
     })
 
-    val adjMatrixEntry2 = data.map(_.split(" ") match { case Array(id1 ,id2) =>
-      MatrixEntry(id2.toLong,id1.toLong , 1.0)
+    val adjMatrixEntry2 = data.map(_.split(" ") match { case Array(id1 ,id2,click) =>
+      MatrixEntry(id2.toLong,id1.toLong , click.toInt)
     })
 
     val adjMatrixEntry = adjMatrixEntry1.union(adjMatrixEntry2)
@@ -194,15 +208,12 @@ object ANDIalgr {
   }
 
   //binary bipartite graphs
-  def geneBinaryBipartiteGraphWeight(data:RDD[String]):VertexRDD[Int]={
+  def geneBinaryBipartiteGraphWeight(data:RDD[String]):RDD[(Long,Int)]={
 
-    val edgeRdd = data.map{_.split(" ") match {case Array(id1,id2) =>
-      Edge(id1.toLong ,id2.toLong,None)
-    }}
+    data.flatMap{_.split(" ") match {case Array(id1,id2,click) =>
+      Seq((id1.toLong ,click.toInt),(id2.toLong,click.toInt))
+    }}.reduceByKey(_ + _)
 
-    val graph = Graph.fromEdges(edgeRdd,0)
-    val degrees: VertexRDD[Int] = graph.degrees
-    degrees
   }
 
   //continuous bipartite graphs
