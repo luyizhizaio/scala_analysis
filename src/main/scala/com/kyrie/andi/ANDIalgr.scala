@@ -27,30 +27,38 @@ object ANDIalgr {
     val conf = new SparkConf().setMaster("local[*]").setAppName(this.getClass.getSimpleName)
     val sc = new SparkContext(conf)
 
-    val data:RDD[String] = sc.textFile("data/edge2")
+    val data:RDD[String] = sc.textFile("data/edge3")
     //活动节点
-    val seed = List(2,3)
+    val seed = List(0,1,2,3)
     //迭代次数
     var t=100
     //潜在感兴趣用户的数量
-    val k = 2
+    val k = 10
 
     val epsilon = 0.1
-    //本地簇的大小-1
+    //本地簇的个数 -1
     val b = 1
     //节点数
-    val n = 4
+    val n = 15
 
-    val l = 4.0
+    val l = 1
 
-    //用户的总数量
-    val u =2
+    //用户的id的限制
+    val u =3
 
     val idRDD = andiAlgr(sc,data,t,seed,k,n,epsilon,b,l,u)
     println("result：")
     idRDD.foreach(println)
 
   }
+
+
+  /*def lTlastEpsilon(vol:Double,phi:Double): (Int, Int, Float)= {
+    val l = Math.ceil((Math.log(vol)/ Math.log(2d)) / 2)
+    val tlast = (l + 1) * Math.ceil(2.0 /(phi * phi) * Math.log(c1 * (l +2) * Math.sqrt(vol / 2.0)))
+    val epsilon = 1.0 / (c3 * (l + 2) * tlast * (2 << b))
+    (l.toInt, tlast.toInt, epsilon.toFloat)
+  }*/
 
   /**
    * 生成单位阵
@@ -151,7 +159,7 @@ object ANDIalgr {
           //Volume 判断条件：节点的值除以节点的度得到一个值，根据这个值排序，取出前j个节点,前j个节点的度的和
           val topQt = qt.top(j+1)(QtPreDef.tupleOrdering)
           topQt.foreach(println(_))
-          users = topQt.filter{case(index,_,_) => index < u}.length
+          users = topQt.filter{case(index,_,_) => index > u}.length
 
           val lambda = topQt.map{tri => tri._3}.reduce(_ + _)
           println(s"lamda:$lambda")
@@ -200,12 +208,12 @@ object ANDIalgr {
 
   def geneAdjMatrix(data:RDD[String]) :BlockMatrix = {
 
-    val adjMatrixEntry1 = data.map(_.split(" ") match { case Array(id1 ,id2,click) =>
-      MatrixEntry(id1.toLong,id2.toLong , click.toInt)
+    val adjMatrixEntry1 = data.map(_.split(" ") match { case Array(id1 ,id2) =>
+      MatrixEntry(id1.toLong,id2.toLong , 1)
     })
 
-    val adjMatrixEntry2 = data.map(_.split(" ") match { case Array(id1 ,id2,click) =>
-      MatrixEntry(id2.toLong,id1.toLong , click.toInt)
+    val adjMatrixEntry2 = data.map(_.split(" ") match { case Array(id1 ,id2) =>
+      MatrixEntry(id2.toLong,id1.toLong , 1)
     })
 
     val adjMatrixEntry = adjMatrixEntry1.union(adjMatrixEntry2)
@@ -217,8 +225,8 @@ object ANDIalgr {
   //binary bipartite graphs
   def geneBinaryBipartiteGraphWeight(data:RDD[String]):RDD[(Long,Int)]={
 
-    data.flatMap{_.split(" ") match {case Array(id1,id2,click) =>
-      Seq((id1.toLong ,click.toInt),(id2.toLong,click.toInt))
+    data.flatMap{_.split(" ") match {case Array(id1,id2) =>
+      Seq((id1.toLong ,1),(id2.toLong,1))
     }}.reduceByKey(_ + _)
 
   }
