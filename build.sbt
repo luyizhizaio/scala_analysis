@@ -25,6 +25,7 @@ libraryDependencies  ++= Seq(
   "edu.stanford.nlp" % "stanford-corenlp" % "3.4.1" classifier "models",
   "org.scalanlp" %% "breeze" % "0.12",
   "org.scalanlp" %% "breeze-natives" % "0.12",
-  "org.scalanlp" %% "breeze-viz" % "0.12"
+  "org.scalanlp" %% "breeze-viz" % "0.12",
+  "log4j" %% "log4j" % "1.2.17"
 )
 
