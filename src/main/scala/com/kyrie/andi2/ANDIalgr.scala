@@ -1,13 +1,13 @@
-package com.kyrie.andi
-
+package com.kyrie.andi2
 
 import org.apache.log4j.{Level, Logger}
-import org.apache.spark.graphx.{VertexRDD, Graph, Edge}
-import org.apache.spark.mllib.linalg.distributed.{BlockMatrix, CoordinateMatrix, RowMatrix, MatrixEntry}
+import org.apache.spark.graphx.VertexRDD
+import org.apache.spark.mllib.linalg.distributed.{BlockMatrix, CoordinateMatrix, MatrixEntry}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel
-import org.apache.spark.{SparkContext, SparkConf}
-import util.control.Breaks._
+import org.apache.spark.{SparkConf, SparkContext}
+
+import scala.util.control.Breaks._
 
 /**
  * Created by tend on 2017/10/9.
@@ -52,14 +52,6 @@ object ANDIalgr {
     idRDD.foreach(println)
 
   }
-
-
-  /*def lTlastEpsilon(vol:Double,phi:Double): (Int, Int, Float)= {
-    val l = Math.ceil((Math.log(vol)/ Math.log(2d)) / 2)
-    val tlast = (l + 1) * Math.ceil(2.0 /(phi * phi) * Math.log(c1 * (l +2) * Math.sqrt(vol / 2.0)))
-    val epsilon = 1.0 / (c3 * (l + 2) * tlast * (2 << b))
-    (l.toInt, tlast.toInt, epsilon.toFloat)
-  }*/
 
   /**
    * 生成单位阵

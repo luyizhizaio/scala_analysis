@@ -1,22 +1,21 @@
 package com.kyrie.andi
 
-
 import org.apache.log4j.{Level, Logger}
-import org.apache.spark.graphx.{VertexRDD, Graph, Edge}
-import org.apache.spark.mllib.linalg.distributed.{BlockMatrix, CoordinateMatrix, RowMatrix, MatrixEntry}
+import org.apache.spark.graphx.VertexRDD
+import org.apache.spark.mllib.linalg.distributed.{BlockMatrix, CoordinateMatrix, MatrixEntry}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel
-import org.apache.spark.{SparkContext, SparkConf}
-import util.control.Breaks._
+import org.apache.spark.{SparkConf, SparkContext}
+
+import scala.util.control.Breaks._
 
 /**
  * Created by tend on 2017/10/9.
  */
-object ANDIalgr {
+object ANDIalgrClick {
 
 
-
-  val c4 = 140.0 *20
+  val c4 = 140.0
 
 
   case class Param(seed:List[Int],k:Int,epsilon:Int,b:Int,n:Int,l:Int,u:Int)
@@ -28,15 +27,15 @@ object ANDIalgr {
     val conf = new SparkConf().setMaster("local[*]").setAppName(this.getClass.getSimpleName)
     val sc = new SparkContext(conf)
 
-    val data:RDD[String] = sc.textFile("data/edge3")
+    val data:RDD[String] = sc.textFile("data/edge")
     //活动节点
-    val seed = List(0,1)
+    val seed = List(0,1,2,3)
     //迭代次数
     var t=100
     //潜在感兴趣用户的数量
-    val k = 4
+    val k = 10
 
-    val epsilon = 0.0001
+    val epsilon = 0.1
     //本地簇的个数 -1
     val b = 1
     //节点数
@@ -52,14 +51,6 @@ object ANDIalgr {
     idRDD.foreach(println)
 
   }
-
-
-  /*def lTlastEpsilon(vol:Double,phi:Double): (Int, Int, Float)= {
-    val l = Math.ceil((Math.log(vol)/ Math.log(2d)) / 2)
-    val tlast = (l + 1) * Math.ceil(2.0 /(phi * phi) * Math.log(c1 * (l +2) * Math.sqrt(vol / 2.0)))
-    val epsilon = 1.0 / (c3 * (l + 2) * tlast * (2 << b))
-    (l.toInt, tlast.toInt, epsilon.toFloat)
-  }*/
 
   /**
    * 生成单位阵
@@ -79,7 +70,7 @@ object ANDIalgr {
     //邻接矩阵
     val adjMatrix = geneAdjMatrix(data)
     //权重-节点的度
-    val degrees:RDD[(Long,Int)] = geneBinaryBipartiteGraphWeight(data).cache()
+    val degrees:RDD[(Long,Double)] = geneBinaryBipartiteGraphWeight(data).cache()
 
     val vol =  degrees.map{v => v._2}.reduce(_ + _).toDouble
     println(s"vol :$vol")
@@ -158,7 +149,7 @@ object ANDIalgr {
 
 
           //Volume 判断条件：节点的值除以节点的度得到一个值，根据这个值排序，取出前j个节点,前j个节点的度的和
-          val topQt = qt.top(j+1)(QtPreDef.tupleOrdering)
+          val topQt = qt.top(j+1)(QtPreDef.tupleOrderingDouble)
           topQt.foreach(println(_))
           users = topQt.filter{case(index,_,_) => index > u}.length
 
@@ -209,12 +200,12 @@ object ANDIalgr {
 
   def geneAdjMatrix(data:RDD[String]) :BlockMatrix = {
 
-    val adjMatrixEntry1 = data.map(_.split(" ") match { case Array(id1 ,id2) =>
-      MatrixEntry(id1.toLong,id2.toLong , 1)
+    val adjMatrixEntry1 = data.map(_.split(" ") match { case Array(id1 ,id2,click) =>
+      MatrixEntry(id1.toLong,id2.toLong , click.toDouble)
     })
 
-    val adjMatrixEntry2 = data.map(_.split(" ") match { case Array(id1 ,id2) =>
-      MatrixEntry(id2.toLong,id1.toLong , 1)
+    val adjMatrixEntry2 = data.map(_.split(" ") match { case Array(id1 ,id2,click) =>
+      MatrixEntry(id2.toLong,id1.toLong , click.toDouble)
     })
 
     val adjMatrixEntry = adjMatrixEntry1.union(adjMatrixEntry2)
@@ -224,10 +215,10 @@ object ANDIalgr {
   }
 
   //binary bipartite graphs
-  def geneBinaryBipartiteGraphWeight(data:RDD[String]):RDD[(Long,Int)]={
+  def geneBinaryBipartiteGraphWeight(data:RDD[String]):RDD[(Long,Double)]={
 
-    data.flatMap{_.split(" ") match {case Array(id1,id2) =>
-      Seq((id1.toLong ,1),(id2.toLong,1))
+    data.flatMap{_.split(" ") match {case Array(id1,id2,click) =>
+      Seq((id1.toLong ,click.toDouble),(id2.toLong,click.toDouble))
     }}.reduceByKey(_ + _)
 
   }

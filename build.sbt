@@ -23,6 +23,7 @@ unmanagedBase := baseDirectory.value / "lib"
 
 
 libraryDependencies  ++= Seq(
+  "com.typesafe" % "config" %"1.2.1",
   "org.apache.spark" %% "spark-core" % sparkVersion,
   "org.apache.spark" %% "spark-sql" % sparkVersion,
   "org.apache.spark" %% "spark-mllib" % sparkVersion,
@@ -40,5 +41,5 @@ libraryDependencies  ++= Seq(
   "org.scalanlp" %% "breeze-natives" % "0.12",
   "org.scalanlp" %% "breeze-viz" % "0.12",
   "org.elasticsearch" % "elasticsearch-spark-20_2.11" % "6.0.0"
-//  "log4j" %% "log4j" % "1.2.17"
+  //"log4j" %% "log4j" % "1.2.17"
 )
